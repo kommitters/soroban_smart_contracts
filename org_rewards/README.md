@@ -1,5 +1,5 @@
-# Organization's rewards contract
-A smart contract written in Soroban to reward members of an organization who perform meaningful tasks.
+# Organization Contract
+Organization smart contract implementation in Rust for Soroban (Stellar's Smart Contract)
 
 Provides to any organization the ability of:
 - Add/Remove members to it
