@@ -14,6 +14,10 @@ A smart contract to reward members of an organization who perform meaningful tas
 
 We welcome everyone to contribute. Make sure you have read the [CODE_OF_CONDUCT][coc] before.
 
+## Contributing
+
+For information on how to contribute, please refer to our [CONTRIBUTING][contributing] guide.
+
 ## License
 
 This repository is licensed under an MIT license. See [LICENSE][license] for details.
@@ -25,12 +29,13 @@ This repository is licensed under an MIT license. See [LICENSE][license] for det
 [GitBook][gitbook] sponsors this repository documentation.
 
 ## Acknowledgements
+
 Made with 💙 by [kommitters Open Source](https://kommit.co)
 
 
 [gitbook]: https://www.gitbook.com/
 [soroban]: https://soroban.stellar.org/
-[coc]: https://github.com/kommitters/soroban-smart-contracts/blob/main/CODE_OF_CONDUCT.md
-[sc-rewards]: https://github.com/kommitters/soroban-smart-contracts/blob/main/org_rewards/
-[contributing]: https://github.com/kommitters/soroban-smart-contracts/blob/main/CONTRIBUTING.md
-[license]: https://github.com/kommitters/soroban-smart-contracts/blob/main/LICENSEA
+[coc]: https://github.com/kommitters/soroban_smart_contracts/blob/main/CODE_OF_CONDUCT.md
+[sc-rewards]: https://github.com/kommitters/soroban_smart_contracts/blob/main/org_rewards/
+[contributing]: https://github.com/kommitters/soroban_smart_contracts/blob/main/CONTRIBUTING.md
+[license]: https://github.com/kommitters/soroban_smart_contracts/blob/main/LICENSEA
