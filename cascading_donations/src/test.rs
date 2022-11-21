@@ -25,106 +25,68 @@ fn create_and_init_token_contract(env: &Env, admin_id: &Identifier) -> (BytesN<3
 }
 
 #[test]
-fn test() {
+fn basic_donation_without_cascade() {
     /*
         [EXAMPLE]
         MAIN PROJECT
         |-   dependencie_1
         |-   dependencie_2
-        |--     sub_dependencie_1
-        |--     sub_dependencie_2
 
         Expected workflow
-        1. Donate 1000 to MAIN PROJECT
+        1. Donate 1000 to MAIN_PROJECT
         2. The MAIN PROJECT receives the donation
-        3. Auto donate to dependencie_1 with a xfer
-        4. Auto donate to dependencie_2 with a donation invocation (Should be a contract since is a child with sub childs)
-        5. The dependencie_2 receives the donation
-        6. Auto donate to sub_dependencie_1 with a xfer
-        7. Auto donate to sub_dependencie_2 with a xfer
+        3. Auto donate to dependencie_1 with 10 percentege with a xfer
+        4. Auto donate to dependencie_2 with 30 percentege with a xfer
+
+        Expected Result = {
+            MAIN_PROJECT -> 600
+            dependencie_1 -> 100
+            dependencie_2 -> 300
+        }
     */
 
     let env = Env::default();
 
-    // let (admin_id, admin_sign) = ed25519::generate(&env);
-
-    // USERS
     let admin = env.accounts().generate();
     let admin_id = Identifier::Account(admin.clone());
 
     let donator = env.accounts().generate();
     let donator_id = Identifier::Account(donator.clone());
 
-    // PARENT CONTRACT (PARENT PROJECT)
+    // CONTRACT
     let contract_id = env.register_contract(None, CascadeDonationContract);
     let contract_client = CascadeDonationContractClient::new(&env, &contract_id);
 
-    // PARENT PROJECT CHILDREN ACCOUNTS
+    // CREATE TOKEN CONTRACT
+    let (token_id, token_client) = create_and_init_token_contract(&env, &admin_id);
+
+    // CHILDREN ACCOUNTS
     let dependencie_1 = env.accounts().generate();
     let dependencie_1_id = Identifier::Account(dependencie_1.clone());
 
     let dependencie_2 = env.accounts().generate();
     let dependencie_2_id = Identifier::Account(dependencie_2.clone());
 
-    // PARENT CHILD CONTRACT (CHILD CONTRACT)
-    let child_contract_id = env.register_contract(None, CascadeDonationContract);
-    let child_contract_client = CascadeDonationContractClient::new(&env, &child_contract_id);
-
-    // SUB PROJECT 2 CHILDREN
-    let sub_dependencie_1 = env.accounts().generate();
-    let sub_dependencie_1_id = Identifier::Account(sub_dependencie_1.clone());
-
-    let sub_dependencie_2 = env.accounts().generate();
-    let sub_dependencie_2_id = Identifier::Account(sub_dependencie_2.clone());
-
-    // CREATE TOKEN CONTRACT
-    let (token_id, token_client) = create_and_init_token_contract(&env, &admin_id);
-
-    // PARENT 1 CHILDREN
-    let mut parent1_children: Vec<Node> = vec![&env];
-    let parent_1_child_1 =
-        Node {
-            address: soroban_sdk::Address::Account(sub_dependencie_1.clone()),
-            name: symbol!("subdep_1"),
-            percentage: 20
-        };
-
-    let parent_1_child_2 =
-        Node {
-            address: soroban_sdk::Address::Account(sub_dependencie_2.clone()),
-            name: symbol!("subdep_2"),
-            percentage: 20
-        };
-
-    parent1_children.push_back(parent_1_child_1);
-    parent1_children.push_back(parent_1_child_2);
-    // END PARENT 1 CHILDREN
-
-    //PARENT CHILDREN
-    let child_parent_1 =
-        Node {
-            address: soroban_sdk::Address::Contract(child_contract_id.clone()),
-            name: symbol!("c_parent_1"),
-            percentage: 20
-        };
-
+    // CHILDREN NODES
     let child_1 =
         Node {
             address: soroban_sdk::Address::Account(dependencie_1.clone()),
             name: symbol!("dep_1"),
-            percentage: 20
+            percentage: 10
         };
-    // END CHILDREN
 
-    child_contract_client.initialize(&token_id, &admin_id, &parent1_children);
-    std::println!("======= CHILD CONTRACT CHILDREN ========: {:?}", child_contract_client.g_children());
+    let child_2 =
+        Node {
+            address: soroban_sdk::Address::Account(dependencie_2.clone()),
+            name: symbol!("dep_2"),
+            percentage: 30
+        };
 
     let mut children: Vec<Node> = vec![&env];
     children.push_back(child_1);
-    children.push_back(child_parent_1);
+    children.push_back(child_2);
 
     contract_client.initialize(&token_id, &admin_id, &children);
-    std::println!("======= MAIN CONTRACT CHILDREN ========: {:?}", contract_client.g_children());
 
     // FUND DONATOR ACCOUNT
     token_client.with_source_account(&admin).mint(
@@ -134,10 +96,6 @@ fn test() {
         &BigInt::from_u32(&env, 2000)
     );
 
-    std::println!("======= DONATOR BALANCE ========: {:?}", token_client.balance(&donator_id));
-    std::println!("======= CONTRACT BALANCE ========: {:?}", token_client.balance(&Identifier::Contract(contract_id.clone())));
-    std::println!("==================================");
-
     token_client.with_source_account(&donator).approve(
         &Signature::Invoker,
         &BigInt::zero(&env),
@@ -146,6 +104,164 @@ fn test() {
     );
 
     contract_client.with_source_account(&donator).donate(&BigInt::from_u32(&env, 1000), &donator_id);
+
     std::println!("======= DONATOR BALANCE ========: {:?}", token_client.balance(&donator_id));
     std::println!("======= CONTRACT BALANCE ========: {:?}", token_client.balance(&Identifier::Contract(contract_id.clone())));
+    std::println!("======= dependencie_1 BALANCE ========: {:?}", token_client.balance(&dependencie_1_id));
+    std::println!("======= dependencie_2 BALANCE ========: {:?}", token_client.balance(&dependencie_2_id));
+    std::println!("==================================");
+
+    assert_eq!(
+        token_client.balance(&Identifier::Contract(contract_id.clone())),
+        &BigInt::from_u32(&env, 600),
+        "Main project gets the correct balance"
+    );
+
+    assert_eq!(
+        token_client.balance(&dependencie_1_id),
+        &BigInt::from_u32(&env, 100),
+        "Dependencie 1 receives the correct balance"
+    );
+
+    assert_eq!(
+        token_client.balance(&dependencie_2_id),
+        &BigInt::from_u32(&env, 300),
+        "Dependencie 2 receives the correct balance"
+    );
+
 }
+
+// #[test]
+// fn contract_with_parent_children() {
+//         /*
+//         [EXAMPLE]
+//         MAIN PROJECT
+//         |-   dependencie_1
+//         |-   dependencie_2
+//         |--     sub_dependencie_1
+//         |--     sub_dependencie_2
+
+//         Expected workflow
+//         1. Donate 1000 to MAIN PROJECT
+//         2. The MAIN PROJECT receives the donation
+//         3. Auto donate to dependencie_1 with a xfer
+//         4. Auto donate to dependencie_2 with a donation invocation (Should be a contract since is a child with sub childs)
+//         5. The dependencie_2 receives the donation
+//         6. Auto donate to sub_dependencie_1 with a xfer
+//         7. Auto donate to sub_dependencie_2 with a xfer
+//     */
+
+//     let env = Env::default();
+
+//     // let (admin_id, admin_sign) = ed25519::generate(&env);
+
+//     // USERS
+//     let admin = env.accounts().generate();
+//     let admin_id = Identifier::Account(admin.clone());
+
+//     let donator = env.accounts().generate();
+//     let donator_id = Identifier::Account(donator.clone());
+
+//     // PARENT CONTRACT (PARENT PROJECT)
+//     let contract_id = env.register_contract(None, CascadeDonationContract);
+//     let contract_client = CascadeDonationContractClient::new(&env, &contract_id);
+
+//     // PARENT PROJECT CHILDREN ACCOUNTS
+//     let dependencie_1 = env.accounts().generate();
+//     let dependencie_1_id = Identifier::Account(dependencie_1.clone());
+
+//     let dependencie_2 = env.accounts().generate();
+//     let dependencie_2_id = Identifier::Account(dependencie_2.clone());
+
+//     // PARENT CHILD CONTRACT (CHILD CONTRACT)
+//     let child_contract_id = env.register_contract(None, CascadeDonationContract);
+//     let child_contract_client = CascadeDonationContractClient::new(&env, &child_contract_id);
+
+//     // SUB PROJECT 2 CHILDREN
+//     let sub_dependencie_1 = env.accounts().generate();
+//     let sub_dependencie_1_id = Identifier::Account(sub_dependencie_1.clone());
+
+//     let sub_dependencie_2 = env.accounts().generate();
+//     let sub_dependencie_2_id = Identifier::Account(sub_dependencie_2.clone());
+
+//     // CREATE TOKEN CONTRACT
+//     let (token_id, token_client) = create_and_init_token_contract(&env, &admin_id);
+
+//     // PARENT 1 CHILDREN
+//     let mut parent1_children: Vec<Node> = vec![&env];
+//     let parent_1_child_1 =
+//         Node {
+//             address: soroban_sdk::Address::Account(sub_dependencie_1.clone()),
+//             name: symbol!("subdep_1"),
+//             percentage: 20
+//         };
+
+//     let parent_1_child_2 =
+//         Node {
+//             address: soroban_sdk::Address::Account(sub_dependencie_2.clone()),
+//             name: symbol!("subdep_2"),
+//             percentage: 20
+//         };
+
+//     parent1_children.push_back(parent_1_child_1);
+//     parent1_children.push_back(parent_1_child_2);
+//     // END PARENT 1 CHILDREN
+
+//     //PARENT CHILDREN
+//     let child_parent_1 =
+//         Node {
+//             address: soroban_sdk::Address::Contract(child_contract_id.clone()),
+//             name: symbol!("c_parent_1"),
+//             percentage: 20
+//         };
+
+//     let child_1 =
+//         Node {
+//             address: soroban_sdk::Address::Account(dependencie_1.clone()),
+//             name: symbol!("dep_1"),
+//             percentage: 20
+//         };
+//     // END CHILDREN
+
+//     child_contract_client.initialize(&token_id, &admin_id, &parent1_children);
+//     std::println!("======= CHILD CONTRACT CHILDREN ========: {:?}", child_contract_client.g_children());
+
+//     let mut children: Vec<Node> = vec![&env];
+//     children.push_back(child_1);
+//     children.push_back(child_parent_1);
+
+//     contract_client.initialize(&token_id, &admin_id, &children);
+//     std::println!("======= MAIN CONTRACT CHILDREN ========: {:?}", contract_client.g_children());
+
+//     // FUND DONATOR ACCOUNT
+//     token_client.with_source_account(&admin).mint(
+//         &Signature::Invoker,
+//         &BigInt::zero(&env),
+//         &donator_id,
+//         &BigInt::from_u32(&env, 2000)
+//     );
+
+//     std::println!("======= DONATOR BALANCE ========: {:?}", token_client.balance(&donator_id));
+//     std::println!("======= CONTRACT BALANCE ========: {:?}", token_client.balance(&Identifier::Contract(contract_id.clone())));
+//     std::println!("======= dependencie_1 BALANCE ========: {:?}", token_client.balance(&dependencie_1_id));
+//     std::println!("======= dependencie_2 BALANCE ========: {:?}", token_client.balance(&dependencie_2_id));
+//     std::println!("======= sub_dependencie_1 BALANCE ========: {:?}", token_client.balance(&sub_dependencie_1_id));
+//     std::println!("======= sub_dependencie_2 BALANCE ========: {:?}", token_client.balance(&sub_dependencie_2_id));
+//     std::println!("==================================");
+
+//     token_client.with_source_account(&donator).approve(
+//         &Signature::Invoker,
+//         &BigInt::zero(&env),
+//         &Identifier::Contract(contract_id.clone()),
+//         &BigInt::from_u32(&env, 1000)
+//     );
+
+//     contract_client.with_source_account(&donator).donate(&BigInt::from_u32(&env, 1000), &donator_id);
+//     std::println!("======= DONATOR BALANCE ========: {:?}", token_client.balance(&donator_id));
+//     std::println!("======= CONTRACT BALANCE ========: {:?}", token_client.balance(&Identifier::Contract(contract_id.clone())));
+//     std::println!("======= dependencie_1 BALANCE ========: {:?}", token_client.balance(&dependencie_1_id));
+//     std::println!("======= dependencie_2 BALANCE ========: {:?}", token_client.balance(&dependencie_2_id));
+//     std::println!("======= sub_dependencie_1 BALANCE ========: {:?}", token_client.balance(&sub_dependencie_1_id));
+//     std::println!("======= sub_dependencie_2 BALANCE ========: {:?}", token_client.balance(&sub_dependencie_2_id));
+//     std::println!("==================================");
+// }
