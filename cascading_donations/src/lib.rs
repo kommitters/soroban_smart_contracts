@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contractimpl, contracttype, Env, BigInt, AccountId, BytesN, Vec, ConversionError, Symbol, Address};
+use soroban_sdk::{contractimpl, contracttype, symbol, vec, Env, BigInt, AccountId, BytesN, Vec, ConversionError, Symbol, Address, RawVal};
 
 use soroban_auth::{Identifier, Signature};
 
@@ -55,37 +55,64 @@ fn set_admin_id(e: &Env, admin_id: &Identifier) {
     e.data().set(DataKey::Admin, admin_id);
 }
 
-fn donate_to_child(env: &Env, node: &Node) {
+fn donate_to_child(env: &Env, child_address: &AccountId, percentage: &u32, base_balance: &BigInt) {
+    let tc_id = get_token_contract_id(&env);
+    let client = token::Client::new(&env, &tc_id);
 
-    // VALIDATE NODE ADDRESS
-    // IF AccountId -> xfer
-    // IF BytesN<32> -> invoke donation from contract.
-    // APPROVE SIGN
+    let amount: BigInt = (base_balance * percentage) / 100;
 
-    // XFER
+    client.xfer(
+        &Signature::Invoker,
+        &BigInt::zero(&env),
+        &Identifier::Account(child_address.clone()),
+        &amount
+    );
 }
 
-fn apply_children_donations(env: &Env) {
+fn donate_to_child_parent(env: &Env, node_address: &BytesN<32>, percentage: &u32, base_balance: &BigInt) {
+    let calculated_amount: BigInt = (base_balance * percentage) / 100;
+
+    let amount= BigInt::to_raw(&calculated_amount);
+    let contract_id = env.current_contract().into();
+
+    let args: Vec<RawVal> = vec![
+        &env,
+        amount,
+        contract_id,
+    ];
+
+    env.invoke_contract(&node_address, &symbol!("donate"), args)
+}
+
+fn select_donation_type(env: &Env, child: &Node, base_balance: &BigInt) {
+    match &child.address {
+        Address::Contract(contract_id) => donate_to_child_parent(&env, &contract_id, &child.percentage, &base_balance),
+        Address::Account(account_id) => donate_to_child(&env, &account_id, &child.percentage, &base_balance),
+        _ => panic!("The child address is not supported")
+    }
+}
+
+fn apply_children_donations(env: &Env, base_balance: &BigInt) {
     /*
-    *  Iterate trhough the children, and:
+    *  Iterate through the children, and:
     *      if child.address == AccountId:
     *           transfer -> AccountId, equivalent percentage
     *      else (BytesN<32>):
-    *           Create instance of a CascadeDonationContract using the address
+    *          Invoke an instance of CascadeDonationContract using the address
     *           use the donation behavior to send the "amount" to the child contract
     */
-    // let children = get_children(&env);
-
-    // for child in children {
-    //     match child {
-    //         Ok(node) => donate_to_child(env, &node),
-    //         Err(error) => panic!("Problem reading the node: {:?}", error),
-    //     }
-    // }
+    for child in get_children(&env) {
+        match child {
+            Ok(node) => select_donation_type(env, &node, &base_balance),
+            Err(error) => panic!("Problem reading the node: {:?}", error),
+        }
+    }
 }
 
 fn apply_donation(env: &Env, amount: &BigInt, donator: &Identifier) {
     //Extract the "amount" from the donator account, into contract account
+
+    // ¿Can the donator be extracted from the invoker?
 
     let tc_id = get_token_contract_id(&env);
     let client = token::Client::new(&env, &tc_id);
@@ -100,7 +127,9 @@ fn apply_donation(env: &Env, amount: &BigInt, donator: &Identifier) {
         &contract_identifier,
         &amount
     );
-    //apply_children_donations(&env);
+
+    let contract_balance = client.balance(&contract_identifier);
+    apply_children_donations(&env, &contract_balance);
 }
 
 pub struct CascadeDonationContract;
