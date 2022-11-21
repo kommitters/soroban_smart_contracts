@@ -17,7 +17,7 @@ pub enum DataKey {
     ChildNodes // Vec<Node>
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[contracttype]
 pub struct Node {
     name: Symbol,   // 10 character descriptive name
@@ -56,6 +56,10 @@ fn set_admin_id(e: &Env, admin_id: &Identifier) {
 }
 
 fn donate_to_child(env: &Env, node: &Node) {
+
+    // VALIDATE NODE ADDRESS
+    // IF AccountId -> xfer
+    // IF BytesN<32> -> invoke donation from contract.
     // APPROVE SIGN
 
     // XFER
@@ -96,7 +100,6 @@ fn apply_donation(env: &Env, amount: &BigInt, donator: &Identifier) {
         &contract_identifier,
         &amount
     );
-
     //apply_children_donations(&env);
 }
 
@@ -104,8 +107,10 @@ pub struct CascadeDonationContract;
 
 pub trait CascadeDonationContractTrait {
     fn initialize(env: Env, tc_id: BytesN<32>, admin_id: Identifier, children: Vec<Node>);
+    // fn initialize(env: Env, tc_id: BytesN<32>, admin_id: Identifier);
     fn donate(env: Env, amount: BigInt, donator: Identifier);
     fn s_children(env: Env, new_children: Vec<Node>);
+    fn g_children(env: Env) -> Vec<Node>;
 }
 
 #[contractimpl]
@@ -122,6 +127,10 @@ impl CascadeDonationContractTrait for CascadeDonationContract {
 
     fn s_children(env: Env, new_children: Vec<Node>) {
         set_children(&env, &new_children);
+    }
+
+    fn g_children(env: Env) -> Vec<Node> {
+        get_children(&env)
     }
 }
 
