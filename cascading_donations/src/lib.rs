@@ -44,7 +44,7 @@ fn set_token_contract_id(e: &Env, token_id: &BytesN<32>) {
     e.data().set(DataKey::TkContract, token_id);
 }
 
-fn donate_to_child(env: &Env, child_address: &Identifier, percentage: &u32, base_balance: &BigInt) -> BigInt {
+fn donate_to_child(env: &Env, child_address: &Identifier, percentage: &u32, base_balance: &BigInt) {
     let tc_id = get_token_contract_id(&env);
     let client = token::Client::new(&env, &tc_id);
 
@@ -56,19 +56,15 @@ fn donate_to_child(env: &Env, child_address: &Identifier, percentage: &u32, base
         &child_address,
         &amount
     );
-
-    amount
 }
 
 fn donate_to_parent_child(env: &Env, node_contract_id: &BytesN<32>, percentage: &u32, base_balance: &BigInt, donator: &Identifier) {
-    let calculated_amount = donate_to_child(&env, &Identifier::Contract(node_contract_id.clone()), &percentage, &base_balance);
+    donate_to_child(&env, &Identifier::Contract(node_contract_id.clone()), &percentage, &base_balance);
     
-    let amount= calculated_amount.into_val(&env);
     let raw_donator = donator.into_val(&env);
 
     let args: Vec<RawVal> = vec![
         &env,
-        amount,
         raw_donator
     ];
     
@@ -78,7 +74,7 @@ fn donate_to_parent_child(env: &Env, node_contract_id: &BytesN<32>, percentage: 
 fn apply_donation_type(env: &Env, child: &Node, base_balance: &BigInt, donator: &Identifier) {
     match &child.address {
         Address::Contract(contract_id) => donate_to_parent_child(&env, &contract_id, &child.percentage, &base_balance, &donator),
-        Address::Account(account_id) =>  _ = donate_to_child(&env, &Identifier::Account(account_id.clone()), &child.percentage, &base_balance),
+        Address::Account(account_id) =>  donate_to_child(&env, &Identifier::Account(account_id.clone()), &child.percentage, &base_balance),
     }
 }
 
@@ -115,7 +111,7 @@ pub struct CascadeDonationContract;
 pub trait CascadeDonationContractTrait {
     fn initialize(env: Env, tc_id: BytesN<32>, children: Vec<Node>);
     fn donate(env: Env, amount: BigInt, donator: Identifier);
-    fn donate_ch(env: Env, amount: BigInt, donator: Identifier);
+    fn donate_ch(env: Env, donator: Identifier);
     fn s_children(env: Env, new_children: Vec<Node>);
     fn g_children(env: Env) -> Vec<Node>;
 }
@@ -131,7 +127,7 @@ impl CascadeDonationContractTrait for CascadeDonationContract {
         apply_main_donation(&env, &donator, &amount);
     }
 
-    fn donate_ch(env: Env, amount: BigInt, donator: Identifier) {
+    fn donate_ch(env: Env, donator: Identifier) {
         let tc_id = get_token_contract_id(&env);
         let client = token::Client::new(&env, &tc_id);
 

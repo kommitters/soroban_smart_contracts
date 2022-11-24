@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::{CascadeDonationContract, CascadeDonationContractClient, Identifier, Node};
-use soroban_sdk::{symbol, vec, Env, testutils::{Accounts, Logger}, BigInt, IntoVal, BytesN, Vec};
+use soroban_sdk::{symbol, vec, Env, testutils::{Accounts}, BigInt, IntoVal, BytesN, Vec};
 use soroban_auth::{Signature};
 
 
@@ -12,8 +12,6 @@ mod cascade_donation_contract {
         file = "./target/wasm32-unknown-unknown/release/cascade_donation.wasm"
     );
 }
-
-const WASM: &[u8] = include_bytes!("../target/wasm32-unknown-unknown/release/cascade_donation.wasm");
 
 extern crate std;
 
@@ -184,9 +182,6 @@ fn contract_with_parent_children() {
     // PARENT PROJECT CHILDREN ACCOUNTS
     let dependencie_1 = env.accounts().generate();
     let dependencie_1_id = Identifier::Account(dependencie_1.clone());
-
-    let dependencie_2 = env.accounts().generate();
-    let dependencie_2_id = Identifier::Account(dependencie_2.clone());
 
     // PARENT CHILD CONTRACT (CHILD CONTRACT)
     let child_contract_id = env.register_contract_wasm(None, cascade_donation_contract::WASM);
