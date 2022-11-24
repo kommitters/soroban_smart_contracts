@@ -7,6 +7,14 @@ use soroban_auth::{Signature};
 
 use crate::token::{self, TokenMetadata};
 
+mod cascade_donation_contract {
+    soroban_sdk::contractimport!(
+        file = "./target/wasm32-unknown-unknown/release/cascade_donation.wasm"
+    );
+}
+
+const WASM: &[u8] = include_bytes!("../target/wasm32-unknown-unknown/release/cascade_donation.wasm");
+
 extern crate std;
 
 fn create_and_init_token_contract(env: &Env, admin_id: &Identifier) -> (BytesN<32>, token::Client) {
@@ -87,7 +95,7 @@ fn basic_donation_without_cascade() {
     children.push_back(child_1);
     children.push_back(child_2);
 
-    contract_client.initialize(&token_id, &admin_id, &children);
+    contract_client.initialize(&token_id, &children);
 
     // FUND DONATOR ACCOUNT
     token_client.with_source_account(&admin).mint(
@@ -150,6 +158,14 @@ fn contract_with_parent_children() {
         5. The dependencie_2 receives the donation
         6. Auto donate to sub_dependencie_1 with a xfer
         7. Auto donate to sub_dependencie_2 with a xfer
+
+        Expected Result = {
+            MAIN_PROJECT -> 600
+            dependencie_1 -> 200
+            CHILD PARENT -> 120
+            sub_dependencie_1 -> 40
+            sub_dependencie_2 -> 40
+        }
     */
 
     let env = Env::default();
@@ -164,7 +180,6 @@ fn contract_with_parent_children() {
     // PARENT CONTRACT (PARENT PROJECT)
     let contract_id = env.register_contract(None, CascadeDonationContract);
     let contract_client = CascadeDonationContractClient::new(&env, &contract_id);
-    std::println!("======= PARENT CONTRACT ID ========: {:?}", contract_id.clone());
 
     // PARENT PROJECT CHILDREN ACCOUNTS
     let dependencie_1 = env.accounts().generate();
@@ -174,10 +189,8 @@ fn contract_with_parent_children() {
     let dependencie_2_id = Identifier::Account(dependencie_2.clone());
 
     // PARENT CHILD CONTRACT (CHILD CONTRACT)
-    let child_contract_id = env.register_contract(None, CascadeDonationContract);
+    let child_contract_id = env.register_contract_wasm(None, cascade_donation_contract::WASM);
     let child_contract_client = CascadeDonationContractClient::new(&env, &child_contract_id);
-
-    std::println!("======= CHILD CONTRACT ID ========: {:?}", child_contract_id.clone());
 
     // SUB PROJECT 2 CHILDREN
     let sub_dependencie_1 = env.accounts().generate();
@@ -209,8 +222,9 @@ fn contract_with_parent_children() {
     parent1_children.push_back(parent_1_child_2);
     // END CHILD PARENT CHILDREN
 
-    child_contract_client.initialize(&token_id, &admin_id, &parent1_children);
+    child_contract_client.initialize(&token_id, &parent1_children);
     std::println!("======= CHILD CONTRACT CHILDREN ========: {:?}", child_contract_client.g_children());
+    std::println!("========================================:");
 
     //PARENT CHILDREN
     let child_parent_1 =
@@ -232,7 +246,7 @@ fn contract_with_parent_children() {
     children.push_back(child_1);
     children.push_back(child_parent_1);
 
-    contract_client.initialize(&token_id, &admin_id, &children);
+    contract_client.initialize(&token_id, &children);
     std::println!("======= MAIN CONTRACT CHILDREN ========: {:?}", contract_client.g_children());
 
     // FUND DONATOR ACCOUNT
@@ -246,7 +260,7 @@ fn contract_with_parent_children() {
     std::println!("======= DONATOR BALANCE ========: {:?}", token_client.balance(&donator_id));
     std::println!("======= CONTRACT BALANCE ========: {:?}", token_client.balance(&Identifier::Contract(contract_id.clone())));
     std::println!("======= dependencie_1 BALANCE ========: {:?}", token_client.balance(&dependencie_1_id));
-    std::println!("======= dependencie_2 BALANCE ========: {:?}", token_client.balance(&dependencie_2_id));
+    std::println!("======= CHILD PARENT CONTRACT BALANCE ========: {:?}", token_client.balance(&Identifier::Contract(child_contract_id.clone())));
     std::println!("======= sub_dependencie_1 BALANCE ========: {:?}", token_client.balance(&sub_dependencie_1_id));
     std::println!("======= sub_dependencie_2 BALANCE ========: {:?}", token_client.balance(&sub_dependencie_2_id));
     std::println!("==================================");
@@ -260,11 +274,33 @@ fn contract_with_parent_children() {
 
     contract_client.with_source_account(&donator).donate(&BigInt::from_u32(&env, 1000), &donator_id);
 
-    std::println!("======= DONATOR BALANCE ========: {:?}", token_client.balance(&donator_id));
-    std::println!("======= CONTRACT BALANCE ========: {:?}", token_client.balance(&Identifier::Contract(contract_id.clone())));
-    std::println!("======= dependencie_1 BALANCE ========: {:?}", token_client.balance(&dependencie_1_id));
-    std::println!("======= dependencie_2 BALANCE ========: {:?}", token_client.balance(&dependencie_2_id));
-    std::println!("======= sub_dependencie_1 BALANCE ========: {:?}", token_client.balance(&sub_dependencie_1_id));
-    std::println!("======= sub_dependencie_2 BALANCE ========: {:?}", token_client.balance(&sub_dependencie_2_id));
-    std::println!("==================================");
+    assert_eq!(
+        token_client.balance(&Identifier::Contract(contract_id.clone())),
+        &BigInt::from_u32(&env, 600),
+        "Main project gets the correct balance"
+    );
+
+    assert_eq!(
+        token_client.balance(&dependencie_1_id),
+        &BigInt::from_u32(&env, 200),
+        "Dependencie 1 receives the correct balance"
+    );
+
+    assert_eq!(
+        token_client.balance(&Identifier::Contract(child_contract_id.clone())),
+        &BigInt::from_u32(&env, 120),
+        "Parent Child receives the correct balance"
+    );
+
+    assert_eq!(
+        token_client.balance(&sub_dependencie_1_id),
+        &BigInt::from_u32(&env, 40),
+        "Sub Dependencie 1 receives the correct balance"
+    );
+
+    assert_eq!(
+        token_client.balance(&sub_dependencie_2_id),
+        &BigInt::from_u32(&env, 40),
+        "Sub Dependencie 2 receives the correct balance"
+    );
 }
