@@ -7,12 +7,6 @@ use soroban_auth::{Signature};
 
 use crate::token::{self, TokenMetadata};
 
-mod cascade_donation_contract {
-    soroban_sdk::contractimport!(
-        file = "./target/wasm32-unknown-unknown/release/cascade_donation.wasm"
-    );
-}
-
 extern crate std;
 
 fn create_and_init_token_contract(env: &Env, admin_id: &Identifier) -> (BytesN<32>, token::Client) {
@@ -184,7 +178,7 @@ fn contract_with_parent_children() {
     let dependencie_1_id = Identifier::Account(dependencie_1.clone());
 
     // PARENT CHILD CONTRACT (CHILD CONTRACT)
-    let child_contract_id = env.register_contract_wasm(None, cascade_donation_contract::WASM);
+    let child_contract_id = env.register_contract(None, CascadeDonationContract);
     let child_contract_client = CascadeDonationContractClient::new(&env, &child_contract_id);
 
     // SUB PROJECT 2 CHILDREN
