@@ -58,36 +58,36 @@ fn donate_to_child(env: &Env, child_address: &Identifier, percentage: &u32, base
     );
 }
 
-fn donate_to_parent_child(env: &Env, recipient_contract_id: &BytesN<32>, percentage: &u32, base_balance: &BigInt, donator: &Identifier) {
+fn donate_to_parent_child(env: &Env, recipient_contract_id: &BytesN<32>, percentage: &u32, base_balance: &BigInt, donor: &Identifier) {
     donate_to_child(&env, &Identifier::Contract(recipient_contract_id.clone()), &percentage, &base_balance);
     
-    let raw_donator = donator.into_val(&env);
+    let raw_donor = donor.into_val(&env);
 
     let args: Vec<RawVal> = vec![
         &env,
-        raw_donator
+        raw_donor
     ];
     
     env.invoke_contract(&recipient_contract_id, &symbol!("donate_ch"), args)
 }
 
-fn apply_donation_type(env: &Env, child: &Recipient, base_balance: &BigInt, donator: &Identifier) {
+fn apply_donation_type(env: &Env, child: &Recipient, base_balance: &BigInt, donor: &Identifier) {
     match &child.dest {
-        Address::Contract(contract_id) => donate_to_parent_child(&env, &contract_id, &child.percentage, &base_balance, &donator),
+        Address::Contract(contract_id) => donate_to_parent_child(&env, &contract_id, &child.percentage, &base_balance, &donor),
         Address::Account(account_id) =>  donate_to_child(&env, &Identifier::Account(account_id.clone()), &child.percentage, &base_balance),
     }
 }
 
-fn apply_children_donations(env: &Env, base_balance: &BigInt, donator: &Identifier) {
+fn apply_children_donations(env: &Env, base_balance: &BigInt, donor: &Identifier) {
     for child in get_children(&env) {
         match child {
-            Ok(recipient) => apply_donation_type(env, &recipient, &base_balance, &donator),
+            Ok(recipient) => apply_donation_type(env, &recipient, &base_balance, &donor),
             Err(error) => panic!("Problem reading the node: {:?}", error),
         }
     }
 }
 
-fn apply_main_donation(env: &Env, donator: &Identifier, amount: &BigInt) {
+fn apply_main_donation(env: &Env, donor: &Identifier, amount: &BigInt) {
     let tc_id = get_token_contract_id(&env);
     let client = token::Client::new(&env, &tc_id);
 
@@ -97,21 +97,21 @@ fn apply_main_donation(env: &Env, donator: &Identifier, amount: &BigInt) {
     client.xfer_from(
         &Signature::Invoker,
         &BigInt::zero(&env),
-        &donator,
+        &donor,
         &contract_identifier,
         &amount
     );
 
     let contract_balance = client.balance(&contract_identifier);
 
-    apply_children_donations(&env, &contract_balance, &donator);
+    apply_children_donations(&env, &contract_balance, &donor);
 }
 pub struct CascadingDonationContract;
 
 pub trait CascadingDonationContractTrait {
     fn initialize(env: Env, tc_id: BytesN<32>, children: Vec<Recipient>);
-    fn donate(env: Env, amount: BigInt, donator: Identifier);
-    fn donate_ch(env: Env, donator: Identifier);
+    fn donate(env: Env, amount: BigInt, donor: Identifier);
+    fn donate_ch(env: Env, donor: Identifier);
     fn s_children(env: Env, new_children: Vec<Recipient>);
     fn g_children(env: Env) -> Vec<Recipient>;
 }
@@ -123,11 +123,11 @@ impl CascadingDonationContractTrait for CascadingDonationContract {
         set_children(&env, &children)
     }
 
-    fn donate(env: Env, amount: BigInt, donator: Identifier) {
-        apply_main_donation(&env, &donator, &amount);
+    fn donate(env: Env, amount: BigInt, donor: Identifier) {
+        apply_main_donation(&env, &donor, &amount);
     }
 
-    fn donate_ch(env: Env, donator: Identifier) {
+    fn donate_ch(env: Env, donor: Identifier) {
         let tc_id = get_token_contract_id(&env);
         let client = token::Client::new(&env, &tc_id);
 
@@ -136,7 +136,7 @@ impl CascadingDonationContractTrait for CascadingDonationContract {
 
         let contract_balance = client.balance(&contract_identifier);
 
-        apply_children_donations(&env, &contract_balance, &donator);
+        apply_children_donations(&env, &contract_balance, &donor);
     }
 
     fn s_children(env: Env, new_children: Vec<Recipient>) {
