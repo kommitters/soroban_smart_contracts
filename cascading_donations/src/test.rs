@@ -89,7 +89,7 @@ fn basic_donation_without_cascade() {
 
     contract_client.initialize(&token_id, &children);
 
-    // FUND DONATOR ACCOUNT
+    // FUND DONOR ACCOUNT
     token_client.with_source_account(&admin).mint(
         &Signature::Invoker,
         &BigInt::zero(&env),
@@ -239,7 +239,7 @@ fn contract_with_parent_children() {
     contract_client.initialize(&token_id, &children);
     std::println!("======= MAIN CONTRACT CHILDREN ========: {:?}", contract_client.g_children());
 
-    // FUND DONATOR ACCOUNT
+    // FUND DONOR ACCOUNT
     token_client.with_source_account(&admin).mint(
         &Signature::Invoker,
         &BigInt::zero(&env),
